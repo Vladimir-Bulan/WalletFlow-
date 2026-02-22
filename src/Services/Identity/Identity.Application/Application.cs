@@ -102,10 +102,11 @@ namespace Identity.Application.Handlers
         private readonly IUserRepository _users;
         private readonly IPasswordHasher _hasher;
         private readonly ITokenService _tokens;
+        private readonly MassTransit.IBus _bus;
 
-        public RegisterCommandHandler(IUserRepository users, IPasswordHasher hasher, ITokenService tokens)
+        public RegisterCommandHandler(IUserRepository users, IPasswordHasher hasher, ITokenService tokens, MassTransit.IBus bus)
         {
-            _users = users; _hasher = hasher; _tokens = tokens;
+            _users = users; _hasher = hasher; _tokens = tokens; _bus = bus;
         }
 
         public async Task<AuthResponse> Handle(RegisterCommand cmd, CancellationToken ct)
@@ -121,6 +122,16 @@ namespace Identity.Application.Handlers
             var refreshToken = _tokens.GenerateRefreshToken();
             user.GenerateRefreshToken(refreshToken);
             await _users.UpdateAsync(user, ct);
+
+            await _bus.Publish(new WalletFlow.Contracts.Events.UserRegisteredIntegrationEvent
+            {
+                UserId = user.Id,
+                Email = user.Email.Value,
+                FirstName = user.Name.FirstName,
+                LastName = user.Name.LastName,
+                Currency = "ARS",
+                RegisteredAt = DateTime.UtcNow
+            }, ct);
 
             return new AuthResponse(accessToken, refreshToken, DateTime.UtcNow.AddHours(1),
                 new UserDto(user.Id, user.Email.Value, user.Name.FirstName, user.Name.LastName, user.Role.ToString(), user.Status.ToString()));
@@ -231,3 +242,4 @@ namespace Identity.Application
         }
     }
 }
+

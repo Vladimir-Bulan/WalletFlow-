@@ -1,4 +1,6 @@
-﻿// ===== DB CONTEXT =====
+﻿using MassTransit;
+using WalletFlow.Contracts.Events;
+// ===== DB CONTEXT =====
 namespace Finance.Infrastructure.Persistence
 {
     using Finance.Domain.Aggregates;
@@ -185,8 +187,26 @@ namespace Finance.Infrastructure
             services.AddScoped<ICachePort, RedisCacheAdapter>();
             services.AddScoped<INotificationPort, ConsoleNotificationAdapter>();
 
+            services.AddMassTransit(x =>
+            {
+                x.AddConsumers(typeof(DependencyInjection).Assembly);
+                x.UsingRabbitMq((ctx, cfg) =>
+                {
+                    cfg.Host(config["RabbitMQ:Host"] ?? "localhost", "/", h =>
+                    {
+                        h.Username(config["RabbitMQ:Username"] ?? "guest");
+                        h.Password(config["RabbitMQ:Password"] ?? "guest");
+                    });
+                    cfg.ConfigureEndpoints(ctx);
+                });
+            });
+
             return services;
         }
     }
 }
+
+
+
+
 
