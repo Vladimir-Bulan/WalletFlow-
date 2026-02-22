@@ -1,0 +1,19 @@
+namespace Finance.Domain.Common;
+
+public abstract class AggregateRoot
+{
+    private readonly List<IDomainEvent> _domainEvents = new();
+
+    public Guid Id { get; protected set; }
+    public int Version { get; protected set; }
+
+    public IReadOnlyList<IDomainEvent> DomainEvents => _domainEvents.AsReadOnly();
+
+    protected void RaiseDomainEvent(IDomainEvent domainEvent)
+    {
+        _domainEvents.Add(domainEvent);
+        Version++;
+    }
+
+    public void ClearDomainEvents() => _domainEvents.Clear();
+}

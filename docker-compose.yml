@@ -1,0 +1,30 @@
+﻿version: '3.8'
+services:
+  postgres:
+    image: postgres:16
+    container_name: walletflow-postgres
+    environment:
+      POSTGRES_USER: walletflow
+      POSTGRES_PASSWORD: walletflow123
+      POSTGRES_DB: walletflow
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+  redis:
+    image: redis:7-alpine
+    container_name: walletflow-redis
+    ports:
+      - "6380:6379"
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: walletflow-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: walletflow
+      RABBITMQ_DEFAULT_PASS: walletflow123
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+volumes:
+  postgres_data:

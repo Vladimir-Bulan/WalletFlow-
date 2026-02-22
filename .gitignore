@@ -1,0 +1,16 @@
+﻿## .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+*.log
+
+## EF migrations temp
+migration.sql
+
+## Environment
+appsettings.Development.json
+
+## Docker volumes
+postgres-data/

@@ -1,0 +1,136 @@
+using Finance.Domain.Common;
+using Finance.Domain.Enums;
+using Finance.Domain.Events;
+using Finance.Domain.Exceptions;
+using Finance.Domain.ValueObjects;
+
+namespace Finance.Domain.Aggregates;
+
+public class Account : AggregateRoot
+{
+    private readonly List<Transaction> _transactions = new();
+
+    public Guid OwnerId { get; private set; }
+    public AccountNumber AccountNumber { get; private set; } = null!;
+    public Money Balance { get; private set; } = null!;
+    public AccountStatus Status { get; private set; }
+    public DateTime CreatedAt { get; private set; }
+    public DateTime? UpdatedAt { get; private set; }
+
+    public IReadOnlyList<Transaction> Transactions => _transactions.AsReadOnly();
+
+    private Account() { }
+
+    public static Account Create(Guid ownerId, string currency = "ARS")
+    {
+        var account = new Account
+        {
+            Id = Guid.NewGuid(),
+            OwnerId = ownerId,
+            AccountNumber = AccountNumber.Generate(),
+            Balance = Money.Zero(currency),
+            Status = AccountStatus.Active,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        account.RaiseDomainEvent(new AccountCreatedEvent(
+            account.Id,
+            ownerId,
+            account.AccountNumber.Value,
+            currency));
+
+        return account;
+    }
+
+    public Transaction Deposit(Money amount, string description = "Deposit")
+    {
+        EnsureAccountIsActive();
+
+        Balance = Balance.Add(amount);
+        UpdatedAt = DateTime.UtcNow;
+
+        var transaction = Transaction.Create(
+            Id, amount, TransactionType.Deposit, description, Balance);
+
+        _transactions.Add(transaction);
+
+        RaiseDomainEvent(new MoneyDepositedEvent(
+            Id, transaction.Id, amount.Amount, amount.Currency, Balance.Amount));
+
+        return transaction;
+    }
+
+    public Transaction Withdraw(Money amount, string description = "Withdrawal")
+    {
+        EnsureAccountIsActive();
+
+        if (amount.IsGreaterThan(Balance))
+            throw new InsufficientFundsException(Id);
+
+        Balance = Balance.Subtract(amount);
+        UpdatedAt = DateTime.UtcNow;
+
+        var transaction = Transaction.Create(
+            Id, amount, TransactionType.Withdrawal, description, Balance);
+
+        _transactions.Add(transaction);
+
+        RaiseDomainEvent(new MoneyWithdrawnEvent(
+            Id, transaction.Id, amount.Amount, amount.Currency, Balance.Amount));
+
+        return transaction;
+    }
+
+    public Transaction Transfer(Account destination, Money amount, string description = "Transfer")
+    {
+        EnsureAccountIsActive();
+        destination.EnsureAccountIsActive();
+
+        if (amount.IsGreaterThan(Balance))
+            throw new InsufficientFundsException(Id);
+
+        Balance = Balance.Subtract(amount);
+        UpdatedAt = DateTime.UtcNow;
+
+        destination.Balance = destination.Balance.Add(amount);
+        destination.UpdatedAt = DateTime.UtcNow;
+
+        var transaction = Transaction.Create(
+            Id, amount, TransactionType.Transfer,
+            description, Balance, destination.Id);
+
+        _transactions.Add(transaction);
+
+        RaiseDomainEvent(new MoneyTransferredEvent(
+            Id, destination.Id, transaction.Id,
+            amount.Amount, amount.Currency, Balance.Amount));
+
+        return transaction;
+    }
+
+    public void Suspend(string reason)
+    {
+        if (Status == AccountStatus.Closed)
+            throw new DomainException("Cannot suspend a closed account.");
+
+        Status = AccountStatus.Suspended;
+        UpdatedAt = DateTime.UtcNow;
+
+        RaiseDomainEvent(new AccountSuspendedEvent(Id, reason));
+    }
+
+    public void Reactivate()
+    {
+        if (Status == AccountStatus.Closed)
+            throw new DomainException("Cannot reactivate a closed account.");
+
+        Status = AccountStatus.Active;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    private void EnsureAccountIsActive()
+    {
+        if (Status != AccountStatus.Active)
+            throw new DomainException($"Account '{Id}' is not active. Current status: {Status}.");
+    }
+}

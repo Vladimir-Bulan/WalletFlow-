@@ -1,0 +1,13 @@
+using Finance.Domain.Common;
+
+namespace Finance.Domain.Events;
+
+public record AccountCreatedEvent(
+    Guid AccountId,
+    Guid OwnerId,
+    string AccountNumber,
+    string Currency
+) : DomainEvent
+{
+    public override string EventType => "account.created";
+}
