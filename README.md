@@ -36,7 +36,8 @@ WalletFlow is a backend platform that allows users to manage a digital wallet. W
 ## Architecture
 
 ### System Overview
-![Architecture Diagram](docs/architecture.png)
+<img width="4759" height="2709" alt="Identity and Finance-2026-02-23-123018" src="https://github.com/user-attachments/assets/7a49f761-c3c3-447e-9c6a-b1394faa35d6" />
+
 ```
                     +──────────────+
                     |    Client    |
@@ -68,14 +69,18 @@ WalletFlow is a backend platform that allows users to manage a digital wallet. W
 ```
 
 ### CQRS + Outbox Internal Flow
-![CQRS Diagram](docs/cqrs-outbox.png)
+<img width="4255" height="1131" alt="Command API Event Flow-2026-02-23-123040" src="https://github.com/user-attachments/assets/b29268ab-5393-4ce4-ae43-d934092666b6" />
+
+
 ```
 Command API -> Command Handler -> Aggregate Root -> Event Store
                                                  -> Outbox Table -> RabbitMQ
 ```
 
 ### Outbox Pattern Sequence
-![Sequence Diagram](docs/sequence.png)
+<img width="6260" height="2205" alt="Client Deposit Transaction-2026-02-23-122958" src="https://github.com/user-attachments/assets/7ccb9981-bebe-4649-9d2f-2e3b54975bc5" />
+
+
 ```
 Client -> Gateway -> Finance -> DB (persist event)
                              -> Outbox (store integration event)
