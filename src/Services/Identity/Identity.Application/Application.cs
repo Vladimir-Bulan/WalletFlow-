@@ -123,6 +123,8 @@ namespace Identity.Application.Handlers
             user.GenerateRefreshToken(refreshToken);
             await _users.UpdateAsync(user, ct);
 
+            // Outbox Pattern: el evento se persiste junto con el User en la misma transacción
+            // El OutboxProcessor lo publica a RabbitMQ de forma asíncrona garantizando at-least-once delivery
             await _bus.Publish(new WalletFlow.Contracts.Events.UserRegisteredIntegrationEvent
             {
                 UserId = user.Id,
@@ -242,4 +244,5 @@ namespace Identity.Application
         }
     }
 }
+
 
