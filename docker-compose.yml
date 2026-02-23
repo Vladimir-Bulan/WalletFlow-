@@ -1,4 +1,5 @@
 ﻿version: '3.8'
+
 services:
   postgres:
     image: postgres:16
@@ -6,25 +7,104 @@ services:
     environment:
       POSTGRES_USER: walletflow
       POSTGRES_PASSWORD: walletflow123
-      POSTGRES_DB: walletflow
-      POSTGRES_HOST_AUTH_METHOD: trust
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U walletflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   redis:
-    image: redis:7-alpine
+    image: redis:7
     container_name: walletflow-redis
     ports:
       - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   rabbitmq:
     image: rabbitmq:3-management
     container_name: walletflow-rabbitmq
     environment:
-      RABBITMQ_DEFAULT_USER: walletflow
-      RABBITMQ_DEFAULT_PASS: walletflow123
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
     ports:
       - "5672:5672"
       - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  identity-api:
+    build:
+      context: .
+      dockerfile: src/Services/Identity/Identity.API/Dockerfile
+    container_name: walletflow-identity
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__Identity: "Host=postgres;Port=5432;Database=walletflow_identity;Username=walletflow;Password=walletflow123"
+      Jwt__Secret: "WalletFlow-Super-Secret-Key-2024-MinLength32Chars!"
+      Jwt__Issuer: "WalletFlow.Identity"
+      Jwt__Audience: "WalletFlow"
+      Jwt__ExpiryMinutes: "60"
+      RabbitMQ__Host: "rabbitmq"
+      RabbitMQ__Username: "guest"
+      RabbitMQ__Password: "guest"
+    ports:
+      - "5001:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  finance-api:
+    build:
+      context: .
+      dockerfile: src/Services/Finance/Finance.API/Dockerfile
+    container_name: walletflow-finance
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__Finance: "Host=postgres;Port=5432;Database=walletflow_finance;Username=walletflow;Password=walletflow123"
+      ConnectionStrings__Redis: "redis:6379"
+      RabbitMQ__Host: "rabbitmq"
+      RabbitMQ__Username: "guest"
+      RabbitMQ__Password: "guest"
+    ports:
+      - "5002:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  gateway:
+    build:
+      context: .
+      dockerfile: src/Gateway/WalletFlow.Gateway/Dockerfile
+    container_name: walletflow-gateway
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      Jwt__Secret: "WalletFlow-Super-Secret-Key-2024-MinLength32Chars!"
+      Jwt__Issuer: "WalletFlow.Identity"
+      Jwt__Audience: "WalletFlow"
+      ReverseProxy__Clusters__identity-cluster__Destinations__identity-1__Address: "http://identity-api:8080"
+      ReverseProxy__Clusters__finance-cluster__Destinations__finance-1__Address: "http://finance-api:8080"
+    ports:
+      - "5000:8080"
+    depends_on:
+      - identity-api
+      - finance-api
+
 volumes:
   postgres_data:
