@@ -1,4 +1,4 @@
-# WalletFlow
+﻿# WalletFlow
 
 ![.NET](https://img.shields.io/badge/.NET-8.0-purple)
 ![ASP.NET Core](https://img.shields.io/badge/ASP.NET-Core-blue)
@@ -13,56 +13,78 @@ Production-grade **microservices platform** for digital wallet management built 
 
 ---
 
-## 🚀 Overview
+## What is WalletFlow?
 
-WalletFlow is a backend-focused distributed system designed to demonstrate:
+WalletFlow is a backend platform that allows users to manage a digital wallet. With its APIs you can:
 
-- Microservices architecture
-- Clean Architecture + DDD
-- CQRS + Event Sourcing
-- Reliable messaging with Outbox Pattern
-- Real-time notifications with SignalR
-- Production-ready Dockerized environment
+**As a user:**
+- Register and automatically receive a JWT + Refresh Token
+- Your wallet account is **created automatically** via integration event between microservices — no manual step needed
+- Login with secure rotating token sessions
+- **Deposit money** into your wallet
+- **Withdraw money** from your wallet
+- **Transfer money** to another account instantly
+- Receive **real-time notifications** via SignalR every time your balance changes — deposits, withdrawals, or incoming transfers
 
-This project showcases enterprise-level backend engineering practices.
-
----
-
-## 🏗 Architecture
-
-```
-                    ┌──────────────┐
-                    │    Client    │
-                    └───────┬──────┘
-                            │
-                    ┌───────▼────────┐
-                    │  API Gateway   │
-                    │    (YARP)      │
-                    │     :5000      │
-                    └───────┬────────┘
-               ┌────────────┴────────────┐
-               │                         │
-        ┌──────▼───────┐         ┌──────▼───────┐
-        │   Identity   │         │   Finance    │
-        │     :5001    │         │     :5002    │
-        └──────┬───────┘         └──────┬───────┘
-               │                         │
-               └───────────┬─────────────┘
-                           │
-                     ┌─────▼─────┐
-                     │ RabbitMQ  │
-                     └─────┬─────┘
-                           │
-                ┌──────────┴──────────┐
-                │                     │
-          ┌─────▼─────┐         ┌─────▼─────┐
-          │ PostgreSQL│         │   Redis   │
-          └───────────┘         └───────────┘
-```
+**As a distributed system:**
+- If a service crashes after saving data but before publishing the event, the **Outbox Pattern guarantees the message is not lost** and retried automatically
+- Full transaction history is reconstructed from immutable events (**Event Sourcing**)
+- The entire stack starts with a single command: `docker-compose up -d`
 
 ---
 
-## 🧱 Tech Stack
+## Architecture
+
+### System Overview
+![Architecture Diagram](docs/architecture.png)
+```
+                    +──────────────+
+                    |    Client    |
+                    +──────┬───────+
+                           |
+                    +──────v────────+
+                    |  API Gateway  |
+                    |    (YARP)     |
+                    |     :5000     |
+                    +──────┬────────+
+               +-----------+-----------+
+               |                       |
+        +──────v───────+       +──────v───────+
+        |   Identity   |       |   Finance    |
+        |     :5001    |       |     :5002    |
+        +──────┬───────+       +──────┬───────+
+               |                       |
+               +-----------+-----------+
+                           |
+                     +─────v─────+
+                     | RabbitMQ  |
+                     +─────┬─────+
+                           |
+                +──────────+──────────+
+                |                     |
+          +─────v─────+         +─────v─────+
+          | PostgreSQL|         |   Redis   |
+          +-----------+         +-----------+
+```
+
+### CQRS + Outbox Internal Flow
+![CQRS Diagram](docs/cqrs-outbox.png)
+```
+Command API -> Command Handler -> Aggregate Root -> Event Store
+                                                 -> Outbox Table -> RabbitMQ
+```
+
+### Outbox Pattern Sequence
+![Sequence Diagram](docs/sequence.png)
+```
+Client -> Gateway -> Finance -> DB (persist event)
+                             -> Outbox (store integration event)
+                                     -> RabbitMQ (publish message)
+```
+
+---
+
+## Tech Stack
 
 ### Core
 - .NET 8
@@ -90,38 +112,21 @@ This project showcases enterprise-level backend engineering practices.
 ### Infrastructure
 - YARP Reverse Proxy
 - SignalR (real-time notifications)
-- Docker
-- Docker Compose
+- Docker + Docker Compose
 
 ---
 
-## 🔐 Core Features
-
-- User registration & authentication
-- JWT access + refresh tokens
-- Account management
-- Deposit transactions
-- Event-driven communication
-- Real-time notifications
-- Health checks & readiness endpoints
-- Distributed caching with Redis
-
----
-
-## ⚙️ Quick Start
-
+## Quick Start
 ```bash
 git clone https://github.com/Vladimir-Bulan/WalletFlow-.git
 cd WalletFlow
 docker-compose up -d
 ```
 
----
-
-## 🌐 Services & Ports
+Services:
 
 | Service      | URL |
-|--------------|------|
+|--------------|-----|
 | Gateway      | http://localhost:5000 |
 | Identity     | http://localhost:5001 |
 | Finance      | http://localhost:5002 |
@@ -129,83 +134,137 @@ docker-compose up -d
 
 ---
 
-## 🧪 API Examples
+## API Examples
 
 ### Register
-
 ```bash
 curl -X POST http://localhost:5000/api/auth/register \
--H "Content-Type: application/json" \
--d '{"email":"john@example.com","firstName":"John","lastName":"Doe","password":"Password123!"}'
+  -H "Content-Type: application/json" \
+  -d '{"email":"john@example.com","firstName":"John","lastName":"Doe","password":"Password123!"}'
 ```
 
-### Login
+> Registering automatically triggers a UserRegisteredIntegrationEvent via RabbitMQ. Finance service consumes it and creates the wallet account automatically.
 
+### Login
 ```bash
 curl -X POST http://localhost:5000/api/auth/login \
--H "Content-Type: application/json" \
--d '{"email":"john@example.com","password":"Password123!"}'
+  -H "Content-Type: application/json" \
+  -d '{"email":"john@example.com","password":"Password123!"}'
 ```
 
 ### Deposit
-
 ```bash
 curl -X POST http://localhost:5000/api/accounts/{id}/deposit \
--H "Authorization: Bearer {token}" \
--H "Content-Type: application/json" \
--d '{"amount": 1000}'
+  -H "Authorization: Bearer {token}" \
+  -H "Content-Type: application/json" \
+  -d '{"amount": 1000}'
+```
+
+### Transfer
+```bash
+curl -X POST http://localhost:5000/api/accounts/{id}/transfer \
+  -H "Authorization: Bearer {token}" \
+  -H "Content-Type: application/json" \
+  -d '{"destinationAccountId": "...", "amount": 250}'
+```
+
+### Refresh Token
+```bash
+curl -X POST http://localhost:5000/api/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{"refreshToken": "..."}'
 ```
 
 ### Health Checks
-
 ```bash
 curl http://localhost:5001/health
+curl http://localhost:5001/health/ready
+curl http://localhost:5002/health
 curl http://localhost:5002/health/ready
+```
+
+### Real-time Notifications (SignalR)
+```javascript
+const connection = new signalR.HubConnectionBuilder()
+  .withUrl("http://localhost:5002/hubs/wallet", {
+    accessTokenFactory: () => accessToken
+  }).build();
+
+connection.on("BalanceUpdated", (data) => {
+  console.log(`${data.type}: ${data.amount} ${data.currency}`);
+  console.log(`New balance: ${data.newBalance}`);
+});
+
+await connection.start();
 ```
 
 ---
 
-## 🧠 Architectural Patterns
+## Architectural Patterns
 
 ### Outbox Pattern
-Ensures reliable at-least-once event delivery by persisting integration events in the same transaction as domain changes.
+Ensures reliable at-least-once event delivery. Integration events are persisted atomically with domain state in the same DB transaction. A background processor publishes them to RabbitMQ, guaranteeing no message is lost even if the service crashes.
 
 ### Event Sourcing
-Application state is reconstructed by replaying immutable domain events.
+Account state is never stored directly. Instead, every change (Deposit, Withdrawal, Transfer) is stored as an immutable domain event. State is reconstructed by replaying the event log.
 
 ### CQRS
-Commands and Queries are separated to improve scalability, maintainability, and read/write optimization.
+Commands (write) and Queries (read) are fully separated via MediatR with validation pipelines using FluentValidation.
 
 ### Domain-Driven Design
-- Aggregates  
-- Value Objects  
-- Domain Events  
-- Bounded Contexts  
+- Aggregates (User, Account)
+- Value Objects (Email, Money, AccountNumber, FullName)
+- Domain Events (UserRegistered, MoneyDeposited, MoneyTransferred)
+- Bounded Contexts (Identity, Finance)
 
 ---
 
-## 🧪 Running Tests
+## Project Structure
+```
+WalletFlow/
+├── src/
+│   ├── Gateway/
+│   │   └── WalletFlow.Gateway/
+│   ├── Services/
+│   │   ├── Identity/
+│   │   │   ├── Identity.Domain/
+│   │   │   ├── Identity.Application/
+│   │   │   ├── Identity.Infrastructure/
+│   │   │   └── Identity.API/
+│   │   └── Finance/
+│   │       ├── Finance.Domain/
+│   │       ├── Finance.Application/
+│   │       ├── Finance.Infrastructure/
+│   │       └── Finance.API/
+│   └── Shared/
+│       └── WalletFlow.Contracts/
+├── tests/
+│   ├── Identity.Tests/
+│   └── Finance.Tests/
+└── docker-compose.yml
+```
 
+---
+
+## Running Tests
 ```bash
 dotnet test
 ```
 
 ---
 
-## 📦 Future Improvements
+## Future Improvements
 
 - Kubernetes deployment
-- OpenTelemetry integration
+- OpenTelemetry + distributed tracing
 - Prometheus + Grafana monitoring
-- Distributed tracing
-- Saga orchestration
+- Saga orchestration pattern
 - Rate limiting
 - API versioning
-- Load testing
 
 ---
 
-## 👨‍💻 Author
+## Author
 
-Vladimir Bulan  
-Backend Developer | .NET | Distributed Systems  
+Vladimir Bulan
+Backend Developer | .NET | Distributed Systems
